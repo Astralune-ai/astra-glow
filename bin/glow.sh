@@ -45,6 +45,9 @@ set_title() { printf '\033]0;%s\007'  "$1" >> "$2" 2>/dev/null; }
 
 anchor_gone() { ! kill -0 "$1" 2>/dev/null; }
 
+# tty 设备的 atime 在用户敲键时更新 (w 的 idle 就靠它) → 天然的「已读」信号
+tty_atime() { stat -f %a "$1" 2>/dev/null || stat -c %X "$1" 2>/dev/null || echo 0; }
+
 # ============================================================
 # watchdog (后台进程): 盯 agent 存活 + done→attn 升级
 # ============================================================
@@ -52,11 +55,22 @@ if [ "$VERB" = "_watch" ]; then
   # $2=ttydev $3=anchor_pid $4=state_dir $5=mode(done|plain)
   TTYDEV="$2"; ANCHOR="$3"; SDIR="$4"; MODE="$5"
   elapsed=0
+  BASE=$(cat "$SDIR/atime0" 2>/dev/null)
   while ! anchor_gone "$ANCHOR"; do
-    sleep 15
-    elapsed=$((elapsed + 15))
+    sleep 5
+    elapsed=$((elapsed + 5))
     # 自己已不是在册 watchdog → 退位 (新状态动词已接管)
     [ "$(cat "$SDIR/watch.pid" 2>/dev/null)" = "$$" ] || exit 0
+    # 「敲键即已读」: done/attn/error 态下用户在本窗口敲了任何键
+    # (回主屏的 Esc/方向键/滚动都算) → 灯的使命完成, 熄回原色。
+    # 状态记成 seen 而非删目录: 若 agent 还在跑 (权限确认场景),
+    # 授权通过后 PostToolUse 的 resume 靠它恢复运行蓝
+    if [ -n "$BASE" ] && [ "$(tty_atime "$TTYDEV")" -gt "$BASE" ] 2>/dev/null; then
+      echo "seen" > "$SDIR/state"
+      rm -f "$SDIR/watch.pid" "$SDIR/atime0"
+      reset_bg "$TTYDEV"
+      exit 0
+    fi
     if [ "$MODE" = "done" ] && [ "$elapsed" -ge "$ATTN_SECS" ]; then
       if [ "$(cat "$SDIR/state" 2>/dev/null)" = "done" ]; then
         echo "attn" > "$SDIR/state"
@@ -123,6 +137,7 @@ case "$VERB" in
     init_state
     kill_jobs
     echo "run" > "$SDIR/state"
+    rm -f "$SDIR/atime0"   # 运行态不做「敲键即已读」— 打字不该熄掉极光
     set_bg "$RUN_COLOR" "$TTYDEV"
     spawn_watch plain
     # 顺手 GC 超过 7 天的孤儿状态目录
@@ -132,6 +147,7 @@ case "$VERB" in
     init_state
     kill_jobs
     echo "done" > "$SDIR/state"
+    tty_atime "$TTYDEV" > "$SDIR/atime0"
     set_bg "$DONE_COLOR" "$TTYDEV"
     set_title "✅ 完成待看" "$TTYDEV"
     spawn_watch done
@@ -151,6 +167,7 @@ case "$VERB" in
     init_state
     kill_jobs
     echo "attn" > "$SDIR/state"
+    tty_atime "$TTYDEV" > "$SDIR/atime0"
     set_bg "$ATTN_COLOR" "$TTYDEV"
     set_title "🔔 等你回应" "$TTYDEV"
     spawn_watch plain
@@ -159,16 +176,19 @@ case "$VERB" in
     init_state
     kill_jobs
     echo "error" > "$SDIR/state"
+    tty_atime "$TTYDEV" > "$SDIR/atime0"
     set_bg "$ERROR_COLOR" "$TTYDEV"
     set_title "❌ 翻车了" "$TTYDEV"
     spawn_watch plain
     ;;
   resume)
-    # PostToolUse 高频调用: 只有 attn 态才需要动作 (授权通过 → 回到运行态)
+    # PostToolUse 高频调用: attn (等授权) 或 seen (已读熄灯但 agent 还在跑)
+    # 才需要动作 → 回到运行蓝; 其余状态秒退
     init_state
-    [ "$(cat "$SDIR/state" 2>/dev/null)" = "attn" ] || exit 0
+    case "$(cat "$SDIR/state" 2>/dev/null)" in attn|seen) ;; *) exit 0 ;; esac
     kill_jobs
     echo "run" > "$SDIR/state"
+    rm -f "$SDIR/atime0"
     set_bg "$RUN_COLOR" "$TTYDEV"
     spawn_watch plain
     ;;

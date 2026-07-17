@@ -56,7 +56,7 @@ With astra-glow, the window itself is the status line. One glance across your ta
 | 🟠 **Needs you** | unread for 10 min, or agent waits for approval | amber breathing + layered waves + rising particles |
 | 💀 **Failed** | the turn errors out | a skull with pulsing red eyes, embers, vignette |
 
-Reply in the window and everything resets to your normal theme. If the agent exits or crashes, a watchdog restores the color automatically — no stale glow left behind.
+The light clears itself the moment it has done its job: **any keystroke in that window** (a reply, an Esc back to the session picker, even a scroll) counts as "seen" and restores your normal theme — detected via the tty's access time, no extra hooks needed. If the agent exits or crashes, a watchdog restores the color automatically — no stale glow left behind.
 
 ## Supported agents
 
