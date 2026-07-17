@@ -27,13 +27,13 @@
 
 <br>
 
-[**Quick Start**](#quick-start) · [**The Four States**](#the-four-states) · [**How It Works**](#how-it-works) · [**Tuning**](#tuning)
+[**Quick Start**](#quick-start) · [**The Five States**](#the-five-states) · [**How It Works**](#how-it-works) · [**Tuning**](#tuning)
 
 <br>
 
-<img src="docs/demo.gif" alt="astra-glow — the four states, rendered live by the actual shader" width="690">
+<img src="docs/demo.gif" alt="astra-glow — the five states, rendered live by the actual shader" width="690">
 
-<sub>*Live render of the actual shader, cycling all four states.*</sub>
+<sub>*Live render of the actual shader, cycling all five states.*</sub>
 
 </div>
 
@@ -47,7 +47,7 @@ Before: to know what an agent session was doing, you clicked into the tab, read 
 
 With astra-glow, the window itself is the status line. One glance across your tabs: flowing aurora means working, green fireflies mean results are waiting, amber waves mean it wants you back, a skull means it went down. You never read a word to know where your attention should go.
 
-## The Four States
+## The Five States
 
 | State | Trigger | Effect |
 |---|---|---|
@@ -55,8 +55,9 @@ With astra-glow, the window itself is the status line. One glance across your ta
 | 🟢 **Done, unread** | agent finishes the turn | emerald breathing + mist waves + drifting fireflies |
 | 🟠 **Needs you** | unread for 10 min, or agent waits for approval | amber breathing + layered waves + rising particles |
 | 💀 **Failed** | the turn errors out | a skull with pulsing red eyes, embers, vignette |
+| 👀 **Seen** | you press any key while the light is calling | quiet violet night-light: slow breathing + rim glow + drifting stars |
 
-The light clears itself the moment it has done its job: **any keystroke in that window** (a reply, an Esc back to the session picker, even a scroll) counts as "seen" and restores your normal theme — detected via the tty's access time, no extra hooks needed. If the agent exits or crashes, a watchdog restores the color automatically — no stale glow left behind.
+The moment the light has done its job, it settles: **any keystroke in that window** (a reply, an Esc back to the session picker, even a scroll) counts as "seen" — detected via the tty's access time, no extra hooks needed — and the shout softens into the violet night-light, keeping you company until your next prompt. If the agent exits or crashes, a watchdog restores your normal theme automatically — no stale glow left behind.
 
 ## Supported agents
 
@@ -108,7 +109,7 @@ The tty is discovered by walking the hook process's parent chain with `lsof` unt
 
 ## Requirements & Terminal Compatibility
 
-| Terminal | Signal colors (4 states) | GPU effects (aurora / fireflies / skull) |
+| Terminal | Signal colors (5 states) | GPU effects (aurora / fireflies / skull) |
 |---|---|---|
 | [Ghostty](https://ghostty.org) ≥ 1.2 | ✅ | ✅ full experience |
 | iTerm2 / Kitty / WezTerm / Alacritty | ✅ (OSC 11 is universal) | — graceful degradation to flat status colors |

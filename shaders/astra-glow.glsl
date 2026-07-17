@@ -1,14 +1,15 @@
 // ============================================================
-// cc-glow.glsl — Claude Code 四态 GPU 特效 (v3.1 保守重写)
+// astra-glow.glsl — AI agent 五态 GPU 特效
 //
-// 写法刻意贴着实测能跑的 Phase 2 版本: 单 mainImage + 唯一辅助
-// 函数 hash21, 全部效果内联, 分类走无分支 one-hot 权重。
+// 写法刻意保守 (Ghostty 的 GLSL→Metal 链挑食): 单 mainImage +
+// 唯一辅助函数 hash21, 全部效果内联, 分类走无分支 one-hot 权重。
 //
-// 信号色 (cc-glow.sh 设置):
+// 信号色 (glow.sh 设置):
 //   run  蓝  #123c66 → 极光流彩 + 星尘
 //   done 绿  #10663a → 翡翠呼吸 + 雾浪 + 萤火虫
-//   attn 琥珀 #654310 → 琥珀呼吸 + 波浪 + 粒子 (Phase 2 原效果)
+//   attn 琥珀 #654310 → 琥珀呼吸 + 波浪 + 粒子
 //   err  红  #66101a → 骷髅头 + 红瞳 + 余烬
+//   seen 紫  #46156b → 静谧夜灯: 慢呼吸 + 边缘微光 + 漂浮星尘
 // 非信号色完全直通; 文字像素蒙版保护。
 // ============================================================
 
@@ -45,7 +46,10 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     float wAmber = warm * amberness;
     float wRed   = warm * (1.0 - amberness);
     float wGreen = (1.0 - warm) * step(nb.r, nb.g) * step(nb.b, nb.g);
-    float wBlue  = clamp(1.0 - warm - wGreen, 0.0, 1.0);
+    float coldB  = clamp(1.0 - warm - wGreen, 0.0, 1.0);    // b 主导组
+    float violetness = smoothstep(0.15, 0.30, nb.r - nb.g);  // 紫: 红高绿低; 蓝: 绿高红低
+    float wViolet = coldB * violetness;
+    float wBlue   = coldB * (1.0 - violetness);
 
     // ════ run: 极光流彩 ════
     float w1 = sin(uv.x * 3.0 + t * 0.50 + sin(uv.y * 4.0 + t * 0.30) * 0.8);
@@ -106,16 +110,22 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     float vig = smoothstep(1.15, 0.35, length((uv - 0.5) * vec2(aspect, 1.0)));
     effErr *= 0.55 + 0.45 * vig;                                  // 暗角
 
+    // ════ seen: 静谧紫罗兰夜灯 ════
+    vec3 effSeen = vec3(0.100, 0.052, 0.165) * (1.0 + 0.10 * sin(t * 0.9 + uv.y * 1.5));
+    float rim = smoothstep(0.45, 1.05, length((uv - 0.5) * vec2(aspect, 1.0)));
+    effSeen += vec3(0.14, 0.08, 0.26) * rim * (0.55 + 0.30 * sin(t * 0.7));
+
     // ════ 粒子 (共用一趟, 参数按 one-hot 权重混合) ════
-    // run=星尘 done=萤火虫 attn=琥珀粒子 err=余烬
-    float pSpeed = 0.25 * wBlue + 0.35 * wGreen + 1.00 * wAmber + 0.80 * wRed;
-    float pSize  = 0.05 * wBlue + 0.09 * wGreen + 0.10 * wAmber + 0.07 * wRed;
-    float pThr   = 0.90 * wBlue + 0.80 * wGreen + 0.75 * wAmber + 0.82 * wRed;
-    float pSeed  = 7.0  * wBlue + 3.0  * wGreen + 0.00 * wAmber + 11.0 * wRed;
+    // run=星尘 done=萤火虫 attn=琥珀粒子 err=余烬 seen=慢星尘
+    float pSpeed = 0.25 * wBlue + 0.35 * wGreen + 1.00 * wAmber + 0.80 * wRed + 0.12 * wViolet;
+    float pSize  = 0.05 * wBlue + 0.09 * wGreen + 0.10 * wAmber + 0.07 * wRed + 0.06 * wViolet;
+    float pThr   = 0.90 * wBlue + 0.80 * wGreen + 0.75 * wAmber + 0.82 * wRed + 0.88 * wViolet;
+    float pSeed  = 7.0  * wBlue + 3.0  * wGreen + 0.00 * wAmber + 11.0 * wRed + 21.0 * wViolet;
     vec3  pCol   = vec3(0.90, 0.95, 1.00) * 0.25 * wBlue
                  + vec3(0.45, 0.95, 0.55) * 0.45 * wGreen
                  + vec3(1.00, 0.60, 0.16) * 0.50 * wAmber
-                 + vec3(1.00, 0.35, 0.10) * 0.40 * wRed;
+                 + vec3(1.00, 0.35, 0.10) * 0.40 * wRed
+                 + vec3(0.72, 0.58, 1.00) * 0.30 * wViolet;
     float parts = 0.0;
     for (int i = 0; i < 3; i++) {
         float fi = float(i);
@@ -136,7 +146,8 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     }
 
     // ── 合成: 状态效果 + 粒子, 文字蒙版保护 ──
-    vec3 eff = effRun * wBlue + effDone * wGreen + effAttn * wAmber + effErr * wRed;
+    vec3 eff = effRun * wBlue + effDone * wGreen + effAttn * wAmber + effErr * wRed
+             + effSeen * wViolet;
     eff += pCol * parts;
     float isBg = 1.0 - smoothstep(0.06, 0.18, distance(tex.rgb, bg));
     fragColor = vec4(mix(tex.rgb, eff, isBg * gate), tex.a);

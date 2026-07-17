@@ -10,6 +10,7 @@
 #   done   完成待看   绿 #10663a → 翡翠呼吸 + 雾浪 + 萤火虫
 #   attn   等人回来   琥珀 #654310 → 琥珀呼吸 + 波浪 + 粒子
 #   error  翻车       红 #66101a → 骷髅头 + 红瞳 + 余烬
+#   seen   已读静候   紫 #46156b → 夜灯: 慢呼吸 + 边缘微光 + 星尘
 #
 # 状态机:
 #   run    (UserPromptSubmit)   清场 → 蓝
@@ -35,6 +36,7 @@ RUN_COLOR="#123c66"
 DONE_COLOR="#10663a"
 ATTN_COLOR="#654310"
 ERROR_COLOR="#66101a"
+SEEN_COLOR="#46156b"
 
 VERB="$1"
 
@@ -62,14 +64,17 @@ if [ "$VERB" = "_watch" ]; then
     # 自己已不是在册 watchdog → 退位 (新状态动词已接管)
     [ "$(cat "$SDIR/watch.pid" 2>/dev/null)" = "$$" ] || exit 0
     # 「敲键即已读」: done/attn/error 态下用户在本窗口敲了任何键
-    # (回主屏的 Esc/方向键/滚动都算) → 灯的使命完成, 熄回原色。
-    # 状态记成 seen 而非删目录: 若 agent 还在跑 (权限确认场景),
-    # 授权通过后 PostToolUse 的 resume 靠它恢复运行蓝
+    # (回主屏的 Esc/方向键/滚动都算) → 切换成静谧紫「seen 夜灯」,
+    # 不熄灯, 安静陪着; 下一条 prompt (run) 或 session 退出才还原。
+    # 若 agent 还在跑 (权限确认场景), 授权通过后 PostToolUse 的
+    # resume 认 seen 态, 恢复运行蓝。watchdog 继续值守盯 agent 存活。
     if [ -n "$BASE" ] && [ "$(tty_atime "$TTYDEV")" -gt "$BASE" ] 2>/dev/null; then
       echo "seen" > "$SDIR/state"
-      rm -f "$SDIR/watch.pid" "$SDIR/atime0"
-      reset_bg "$TTYDEV"
-      exit 0
+      rm -f "$SDIR/atime0"
+      BASE=""
+      set_bg "$SEEN_COLOR" "$TTYDEV"
+      set_title "👀 已读 · 静候" "$TTYDEV"
+      MODE="plain"
     fi
     if [ "$MODE" = "done" ] && [ "$elapsed" -ge "$ATTN_SECS" ]; then
       if [ "$(cat "$SDIR/state" 2>/dev/null)" = "done" ]; then
@@ -201,7 +206,7 @@ case "$VERB" in
   demo)
     # 手动演示: 在当前终端连播四态 (需要真 tty)
     init_state
-    for c in "$RUN_COLOR" "$DONE_COLOR" "$ATTN_COLOR" "$ERROR_COLOR"; do
+    for c in "$RUN_COLOR" "$DONE_COLOR" "$SEEN_COLOR" "$ATTN_COLOR" "$ERROR_COLOR"; do
       set_bg "$c" "$TTYDEV"; sleep "${2:-8}"
     done
     reset_bg "$TTYDEV"
