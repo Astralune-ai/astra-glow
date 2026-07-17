@@ -106,11 +106,18 @@ tty 定位：沿 hook 进程的父链用 `lsof` 上溯，找到第一个 stdio �
 - 检测门要宽（毛玻璃、半透明会衰减采样值），分类用通道**比例**，亮度缩放动不了它。
 - hook 进程通常没有 controlling tty，`/dev/tty` 是死路，走父链上溯。
 
-## 依赖
+## 依赖与终端兼容性
 
-- [Ghostty](https://ghostty.org) ≥ 1.2（custom-shader 支持）— macOS
-- `jq`、`lsof`（安装器 + 引擎）
-- 任何有生命周期 hooks 的 agent
+| 终端 | 信号色（四态） | GPU 特效（极光/萤火虫/骷髅头） |
+|---|---|---|
+| [Ghostty](https://ghostty.org) ≥ 1.2 | ✅ | ✅ 完整体验 |
+| iTerm2 / Kitty / WezTerm / Alacritty | ✅（OSC 11 是通用协议） | — 优雅降级为四色状态灯 |
+
+两层设计上就是解耦的：信号层只要终端支持 OSC 11，四色状态一眼可辨；动画层跑在 Ghostty 的 `custom-shader` 上，其他终端暂无等价物。
+
+另需：`jq`、`lsof`（安装器 + 引擎）、macOS、任何有生命周期 hooks 的 agent。
+
+**让 agent 代装也行**——对 Claude Code 或 Codex 说一句 *"帮我装 github.com/Astralune-ai/astra-glow"*，它照着本 README 就能装完。安装器幂等，动过的配置全部自动备份。
 
 ## License
 

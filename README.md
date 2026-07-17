@@ -106,11 +106,18 @@ The tty is discovered by walking the hook process's parent chain with `lsof` unt
 - Detection thresholds must be loose (translucent, blurred backgrounds attenuate sampled values) and classification must use channel *ratios*, which brightness scaling can't break.
 - Hook processes usually have no controlling tty; `/dev/tty` is a dead end. Walk the ancestry instead.
 
-## Requirements
+## Requirements & Terminal Compatibility
 
-- [Ghostty](https://ghostty.org) ≥ 1.2 (custom-shader support) — macOS
-- `jq`, `lsof` (installer + engine)
-- An agent that fires lifecycle hooks
+| Terminal | Signal colors (4 states) | GPU effects (aurora / fireflies / skull) |
+|---|---|---|
+| [Ghostty](https://ghostty.org) ≥ 1.2 | ✅ | ✅ full experience |
+| iTerm2 / Kitty / WezTerm / Alacritty | ✅ (OSC 11 is universal) | — graceful degradation to flat status colors |
+
+The two layers are decoupled by design: the signal layer needs only OSC 11 support, so on any modern terminal you still get four glanceable status colors. The animation layer rides on Ghostty's `custom-shader`, which has no equivalent elsewhere yet.
+
+Also needed: `jq`, `lsof` (installer + engine), macOS, and an agent that fires lifecycle hooks.
+
+**Installing via your agent works too** — tell Claude Code or Codex: *"install github.com/Astralune-ai/astra-glow"* and it will follow this README end to end. The installer is idempotent and backs up every config it touches.
 
 ## License
 
