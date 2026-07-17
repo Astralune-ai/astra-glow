@@ -2,69 +2,122 @@
 
 # astra-glow
 
-**一眼扫过终端，就知道每个 AI agent 在干嘛——一个字都不用读。**
+> *"一个字都不用读，终端先亮给你看。"*
 
-Ghostty 里的 AI agent 环境状态灯：GPU 渲染的极光、萤火虫、琥珀波浪和骷髅头，由 agent 生命周期 hooks 驱动，零 token 成本。
+![License](https://img.shields.io/badge/License-Source%20Available-blue)
+![Shell](https://img.shields.io/badge/Shell-bash%203.2%2B-green)
+![GPU](https://img.shields.io/badge/Effects-GLSL%2060fps-blueviolet)
+![Ghostty](https://img.shields.io/badge/Terminal-Ghostty-orange)
+![Tokens](https://img.shields.io/badge/AI%20token%20cost-0-brightgreen)
 
-[English](README.md)
+**[English](README.md) · [中文](README_CN.md)**
+
+<br>
+
+**开着六个 agent 标签页——到底哪个在等人？**
+
+**Agent 十分钟前就跑完了，人还在刷手机？**
+
+**一小时前就翻车了，没有任何人知道？**
+
+<br>
+
+### AI coding agent 的环境状态灯。
+### 跑着=极光，跑完=萤火虫，翻车=骷髅头。
+
+<br>
+
+[**快速开始**](#快速开始) · [**四态**](#四态) · [**原理**](#原理) · [**调参**](#调参)
 
 </div>
 
+<br>
+
 ---
 
-## 效果
+## 为什么有它
+
+之前想知道某个 agent session 在干嘛：点进标签页、读 scrollback、判断它是还在跑、跑完了、还是卡在一个没人看见的授权确认上——每个标签页一遍，一小时重复无数遍。跑完的活儿躺着没人读，翻车的任务躺着没人发现。
+
+有了 astra-glow，窗口本身就是状态栏。视线扫过一排标签页：极光流动=在干活，绿色萤火虫=有产出等着看，琥珀波浪=它在喊人，骷髅头=它没了。注意力该去哪，一眼定位。
+
+## 四态
 
 | 状态 | 触发 | 特效 |
 |---|---|---|
-| 🌀 **正在跑** | 你发出 prompt | 暗色极光流彩 + 星尘 |
-| 🟢 **完成待看** | agent 跑完 | 翡翠呼吸 + 雾浪 + 上浮萤火虫 |
-| 🟠 **等你** | 完成 10 分钟没理 / agent 等授权 | 琥珀呼吸 + 层叠波浪 + 粒子 |
-| 💀 **翻车** | agent 报错 | 骷髅头（红瞳脉动）+ 余烬 + 暗角 |
+| 🌀 **正在跑** | 发出 prompt | 暗色极光流彩 + 星尘 |
+| 🟢 **完成待看** | agent 跑完本轮 | 翡翠呼吸 + 雾浪 + 上浮萤火虫 |
+| 🟠 **等人** | 完成 10 分钟没人理 / agent 等授权 | 琥珀呼吸 + 层叠波浪 + 粒子 |
+| 💀 **翻车** | 本轮报错 | 骷髅头（红瞳脉动）+ 余烬 + 暗角 |
 
-在窗口里回复 → 还原主题原色。agent 退出或 crash → watchdog 自动还原，不留残色。
-
-## 原理
-
-两层解耦：
-
-1. **信号层**（`bin/glow.sh`）— agent hooks 调一个 shell 脚本，往本窗口 pty 写 OSC 11「信号色」。四种高饱和特定亮度的颜色，普通暗色主题永远撞不上。没有 shader 也能用（退化成四种静态色）。纯 shell，零 token，无轮询——唯一的常驻进程是每个活跃窗口一个沉睡的 watchdog。
-2. **特效层**（`shaders/astra-glow.glsl`）— Ghostty custom shader 从窗口四角采样背景色，按通道比例识别信号，只在背景像素上渲染对应的 60fps 特效。文字由色距蒙版保护。非信号色完全直通。
-
-精髓：**背景颜色本身就是 shell 世界和 GPU 世界之间的通信信道**。不要 socket、不要文件、不要 daemon。
+在窗口里回复即还原主题原色。agent 退出或 crash，watchdog 自动还原——绝不留残色。
 
 ## 支持的 agent
 
-- **Claude Code** — 完整四态，走 `~/.claude/settings.json` hooks
-- **Codex CLI** — 同样四态，走 `~/.codex/hooks.json`（`UserPromptSubmit` / `Stop` / `PermissionRequest` / `PostToolUse`）
-- 其他任何能在生命周期事件跑命令的 agent：调 `glow.sh run|done|attn|error|resume|end` 即可
+| Agent | 接法 | 状态 |
+|---|---|---|
+| **Claude Code** | `~/.claude/settings.json` hooks | 四态全 |
+| **Codex CLI** | `~/.codex/hooks.json`（`UserPromptSubmit` / `Stop` / `PermissionRequest` / `PostToolUse`） | 四态全 |
+| **其他任何 agent** | 生命周期事件里调 `glow.sh run\|done\|attn\|error\|resume\|end` | 四态全 |
 
-## 安装
+## 快速开始
 
 ```bash
+git clone https://github.com/Astralune-ai/astra-glow.git ~/Code/astra-glow
 cd ~/Code/astra-glow
-./install.sh            # ghostty + claude code + codex 全装, 幂等, 自动备份配置
+./install.sh          # ghostty + claude code + codex 全装; 幂等; 自动备份配置
 ```
 
-装完重载 Ghostty（`cmd+shift+,`）或重启。agent 新开 session 生效。
+重载 Ghostty（`cmd+shift+,`）或重启。agent 新开 session 自动点灯。
 
-立刻试效果：
+立刻看效果，任意终端标签页里：
 
 ```bash
-bin/glow.sh demo 8      # 四态连播, 每态 8 秒
+bin/glow.sh demo 8    # 四态连播, 每态 8 秒
 ```
+
+## 原理
+
+两层解耦，**背景颜色本身就是两层之间的通信信道**——不要 socket、不要文件、不要 daemon：
+
+1. **信号层**（`bin/glow.sh`）— agent hooks 调一个 shell 脚本，往本窗口 pty 写 OSC 11「信号色」。四种高饱和特定亮度的颜色，普通暗色主题永远撞不上。纯 shell，零 AI token，无轮询；唯一常驻进程是每个活跃窗口一个沉睡的 watchdog。
+2. **特效层**（`shaders/astra-glow.glsl`）— Ghostty custom shader 从窗口四角采样背景色，按通道比例识别信号，只在背景像素上渲染对应的 60fps 特效。文字由色距蒙版保护。非信号色完全直通——没装 shader 也有四种静态色可辨。
+
+tty 定位：沿 hook 进程的父链用 `lsof` 上溯，找到第一个 stdio 挂 `/dev/ttys*` 的祖先——它同时是 watchdog 盯的存活锚点。
 
 ## 调参
 
-- 催看阈值：`export GLOW_ATTN_SECS=300`（默认 600 秒）
-- 特效密度/亮度/配色：改 `shaders/astra-glow.glsl`（单 `mainImage`，参数全内联），改完重载 Ghostty
+| 旋钮 | 方法 |
+|---|---|
+| 完成→琥珀催看延时 | `export GLOW_ATTN_SECS=300`（默认 `600`） |
+| 特效密度 / 亮度 / 配色 | 改 `shaders/astra-glow.glsl`（单 `mainImage`，参数全内联），重载 Ghostty |
+| 信号色 | `bin/glow.sh` 顶部 + shader 里对应阈值 |
 
 ## 踩坑实录（Ghostty shader 管线）
 
-- Ghostty 的 GLSL→Metal 翻译链会**静默丢弃**编译不过的 shader，且 glslang 能编译 ≠ Ghostty 能跑。shader 必须保守：单 `mainImage`、辅助函数极少、无分支 one-hot 状态权重。
-- `custom-shader-animation = always` 必须设。默认值在窗口失焦时暂停动画——而状态灯恰恰是给你没盯着的窗口看的。
-- 检测门要宽（毛玻璃/半透明会衰减采样值），分类用通道**比例**（对亮度缩放免疫）。
-- hook 进程通常没有 controlling tty。`glow.sh` 沿父进程链用 `lsof` 找第一个 stdio 挂 `/dev/ttys*` 的祖先——它既是目标 tty 也是存活锚点。
+- Ghostty 的 GLSL→Metal 翻译链会**静默丢弃**编译不过的 shader，且 `glslang` 能过 ≠ Ghostty 能跑。shader 必须保守：单 `mainImage`、辅助函数极少、无分支 one-hot 状态权重。
+- `custom-shader-animation = always` 必须设。默认值在窗口失焦时暂停动画——而状态灯恰恰是给没人盯着的窗口看的。
+- 检测门要宽（毛玻璃、半透明会衰减采样值），分类用通道**比例**，亮度缩放动不了它。
+- hook 进程通常没有 controlling tty，`/dev/tty` 是死路，走父链上溯。
+
+## 依赖
+
+- [Ghostty](https://ghostty.org) ≥ 1.2（custom-shader 支持）— macOS
+- `jq`、`lsof`（安装器 + 引擎）
+- 任何有生命周期 hooks 的 agent
 
 ## License
 
-MIT
+Astra Source Available License. 个人使用和学习免费，商用需单独授权。详见 [LICENSE](LICENSE)。
+
+---
+
+<div align="center">
+
+**别再挨个查岗了，让光替 agent 来报到。**
+
+![astra-glow](https://img.shields.io/badge/astra--glow-ambient%20agent%20status-black?style=for-the-badge)
+
+Powered by [**Astralune**](https://github.com/Astralune-ai)
+
+</div>
