@@ -29,6 +29,12 @@
 
 [**Quick Start**](#quick-start) · [**The Four States**](#the-four-states) · [**How It Works**](#how-it-works) · [**Tuning**](#tuning)
 
+<br>
+
+<img src="docs/demo.gif" alt="astra-glow — the four states, rendered live by the actual shader" width="690">
+
+<sub>*Live render of the actual shader, cycling all four states.*</sub>
+
 </div>
 
 <br>

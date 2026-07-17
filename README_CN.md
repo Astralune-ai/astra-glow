@@ -29,6 +29,12 @@
 
 [**快速开始**](#快速开始) · [**四态**](#四态) · [**原理**](#原理) · [**调参**](#调参)
 
+<br>
+
+<img src="docs/demo.gif" alt="astra-glow — 真 shader 实时渲染的四态连播" width="690">
+
+<sub>*真 shader 实时渲染，四态连播。*</sub>
+
 </div>
 
 <br>
