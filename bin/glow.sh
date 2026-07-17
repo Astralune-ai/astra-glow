@@ -47,8 +47,17 @@ set_title() { printf '\033]0;%s\007'  "$1" >> "$2" 2>/dev/null; }
 
 anchor_gone() { ! kill -0 "$1" 2>/dev/null; }
 
-# tty 设备的 atime 在用户敲键时更新 (w 的 idle 就靠它) → 天然的「已读」信号
+# tty 设备的 atime 在用户敲键时更新 (w 的 idle 就靠它) → 「疑似已读」信号。
+# ⚠️ 但终端协议应答 (光标查询/焦点事件/键盘协商) 也走输入流、同样更新 atime,
+# 所以 atime 跳动只是必要条件, 确认还需 front_is_ghostty 这道闸。
 tty_atime() { stat -f %a "$1" 2>/dev/null || stat -c %X "$1" 2>/dev/null || echo 0; }
+
+# 第二道闸: Ghostty 是不是前台 App (不是 → atime 跳动=协议噪音/切走时的失焦事件)
+# GLOW_TEST_FRONT=0/1 供离线测试注入
+front_is_ghostty() {
+  if [ -n "$GLOW_TEST_FRONT" ]; then [ "$GLOW_TEST_FRONT" = "1" ]; return; fi
+  osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true' 2>/dev/null | grep -qi ghostty
+}
 
 # ============================================================
 # watchdog (后台进程): 盯 agent 存活 + done→attn 升级
@@ -59,22 +68,31 @@ if [ "$VERB" = "_watch" ]; then
   elapsed=0
   BASE=$(cat "$SDIR/atime0" 2>/dev/null)
   while ! anchor_gone "$ANCHOR"; do
-    sleep 5
-    elapsed=$((elapsed + 5))
+    sleep 3
+    elapsed=$((elapsed + 3))
     # 自己已不是在册 watchdog → 退位 (新状态动词已接管)
     [ "$(cat "$SDIR/watch.pid" 2>/dev/null)" = "$$" ] || exit 0
-    # 「敲键即已读」: done/attn/error 态下用户在本窗口敲了任何键
-    # (回主屏的 Esc/方向键/滚动都算) → 切换成静谧紫「seen 夜灯」,
-    # 不熄灯, 安静陪着; 下一条 prompt (run) 或 session 退出才还原。
-    # 若 agent 还在跑 (权限确认场景), 授权通过后 PostToolUse 的
-    # resume 认 seen 态, 恢复运行蓝。watchdog 继续值守盯 agent 存活。
-    if [ -n "$BASE" ] && [ "$(tty_atime "$TTYDEV")" -gt "$BASE" ] 2>/dev/null; then
-      echo "seen" > "$SDIR/state"
-      rm -f "$SDIR/atime0"
-      BASE=""
-      set_bg "$SEEN_COLOR" "$TTYDEV"
-      set_title "👀 已读 · 静候" "$TTYDEV"
-      MODE="plain"
+    # 「敲键即已读」双闸确认: ① atime 跳动 (有输入活动) ② Ghostty 在前台
+    # (人真的在看)。两者都成立 → 切静谧紫「seen 夜灯」, 不熄灯, 安静陪着;
+    # 下一条 prompt (run) 或 session 退出才还原。若 agent 还在跑 (权限确认
+    # 场景), 授权通过后 PostToolUse 的 resume 认 seen 态, 恢复运行蓝。
+    # 只有 atime 跳但人不在前台 → 协议噪音 (查询应答/切走的失焦事件),
+    # 重设基线继续原色。watchdog 全程值守盯 agent 存活。
+    if [ -n "$BASE" ]; then
+      NOW_A=$(tty_atime "$TTYDEV")
+      if [ "$NOW_A" -gt "$BASE" ] 2>/dev/null; then
+        if front_is_ghostty; then
+          echo "seen" > "$SDIR/state"
+          rm -f "$SDIR/atime0"
+          BASE=""
+          set_bg "$SEEN_COLOR" "$TTYDEV"
+          set_title "👀 已读 · 静候" "$TTYDEV"
+          MODE="plain"
+        else
+          BASE="$NOW_A"
+          echo "$BASE" > "$SDIR/atime0"
+        fi
+      fi
     fi
     if [ "$MODE" = "done" ] && [ "$elapsed" -ge "$ATTN_SECS" ]; then
       if [ "$(cat "$SDIR/state" 2>/dev/null)" = "done" ]; then
