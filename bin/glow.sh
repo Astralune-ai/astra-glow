@@ -137,6 +137,17 @@ case "$VERB" in
     spawn_watch done
     ;;
   attn)
+    # Claude Code 的 Notification 事件混着两种通知:
+    #   权限请求 ("Claude needs your permission ...") → 真·等人, 该变琥珀
+    #   闲置提醒 ("Claude is waiting for your input", Stop 后 ~60s 就发)
+    #     → 忽略! 否则完成绿一分钟就被刷黄; 10 分钟催看由 watchdog 升级
+    # (Codex 走 PermissionRequest 事件, 无此歧义, message 不匹配会直接放行)
+    if [ ! -t 0 ]; then
+      MSG=$(cat 2>/dev/null | jq -r '.message // empty' 2>/dev/null)
+      case "$MSG" in
+        *[Ww]aiting*) exit 0 ;;
+      esac
+    fi
     init_state
     kill_jobs
     echo "attn" > "$SDIR/state"
