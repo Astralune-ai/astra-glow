@@ -40,10 +40,27 @@ SEEN_COLOR="#46156b"
 
 VERB="$1"
 
-# ── OSC 写入 ──
-set_bg()    { printf '\033]11;%s\007' "$1" >> "$2" 2>/dev/null; }
-reset_bg()  { printf '\033]111\007'        >> "$1" 2>/dev/null; }
-set_title() { printf '\033]0;%s\007'  "$1" >> "$2" 2>/dev/null; }
+# ── 模式检测: 在 tmux pane 里 → 用 tmux 给本 pane 上色; 否则原生 → OSC 写 tty ──
+# tmux 会拦截 OSC 11 背景色, 且多 pane 共享一个 Ghostty surface, 所以 tmux 里
+# 必须走 `tmux select-pane -P bg=` 给每个 pane 单独设背景, 配合 grid shader
+# 按格局部采样, 实现「一个 pane 一盏灯」。$TMUX_PANE 由 tmux 注入, 子进程(含
+# hook / watchdog)继承; watchdog 是 nohup 子进程也保留此环境, 无需额外传参。
+GLOW_PANE=""
+if [ -n "$TMUX" ] && [ -n "$TMUX_PANE" ]; then GLOW_PANE="$TMUX_PANE"; fi
+
+# ── 上色 (tmux 模式 → pane 背景; 原生模式 → OSC 到 tty) ──
+set_bg() {   # $1=color $2=ttydev
+  if [ -n "$GLOW_PANE" ]; then tmux select-pane -t "$GLOW_PANE" -P "bg=$1" 2>/dev/null
+  else printf '\033]11;%s\007' "$1" >> "$2" 2>/dev/null; fi
+}
+reset_bg() { # $1=ttydev
+  if [ -n "$GLOW_PANE" ]; then tmux select-pane -t "$GLOW_PANE" -P 'bg=default' 2>/dev/null
+  else printf '\033]111\007' >> "$1" 2>/dev/null; fi
+}
+set_title() { # $1=title $2=ttydev  (tmux 模式下 pane 标题意义不大, 跳过)
+  if [ -n "$GLOW_PANE" ]; then :
+  else printf '\033]0;%s\007' "$1" >> "$2" 2>/dev/null; fi
+}
 
 anchor_gone() { ! kill -0 "$1" 2>/dev/null; }
 
