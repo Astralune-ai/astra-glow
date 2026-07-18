@@ -26,23 +26,26 @@ float hash21(vec2 p) {
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec2 uv = fragCoord / iResolution.xy;
     vec4 tex = texture(iChannel0, uv);
-    float t = iTime;
 
-    // ── 定位当前像素所在的格 + 格内本地坐标 puv(0..1) ──
+    // ── 坐标: 每格本地 puv(0..1), 效果在每格内完整居中渲染(与原生分屏每格一盏灯一致)──
     vec2 grid = vec2(COLS, ROWS);
     vec2 cell = floor(uv * grid);
-    vec2 cellOrigin = cell / grid;
-    vec2 cellSize = 1.0 / grid;
     vec2 puv = fract(uv * grid);
     float aspect = (iResolution.x * ROWS) / (iResolution.y * COLS);  // 单格宽高比
+    float cellSeed = hash21(cell * 7.0 + 1.3);                        // 每格独立相位, 不克隆
+    float t = iTime + cellSeed * 40.0;
 
-    // ── 鲁棒采样本格信号色: 格内 16 点取最像信号色的一点(躲开文字污染) ──
+    // ── 信号色检测: 采「当前像素周围的小邻域」而非固定格区域 ──
+    // 关键: 与格边界解耦。真实 tmux pane 不等宽、拖拽后更乱, 若按等宽格采样,
+    // 对不齐的缝里会放行露出原始亮背景 → 丑陋的纯色实边条。改成就地采样后,
+    // 每个信号色像素(含缝里的)都就地检测到并渲染, 对任意 pane 尺寸/拖拽免疫。
+    vec2 sampRad = vec2(0.010, 0.018);   // 邻域半径(y 略大, 字符更高, 利于躲文字)
     vec3 bg = vec3(0.0);
     float best = -1.0;
     for (int i = 0; i < 16; i++) {
         float fi = float(i);
         vec2 sp2 = vec2(mod(fi, 4.0), floor(fi / 4.0)) / 3.0;         // 0..1 网格
-        vec2 q = cellOrigin + cellSize * (0.12 + 0.76 * sp2);
+        vec2 q = uv + (sp2 - 0.5) * 2.0 * sampRad;                    // 以 uv 为中心的邻域
         vec3 c = texture(iChannel0, q).rgb;
         float mx = max(c.r, max(c.g, c.b));
         float mn = min(c.r, min(c.g, c.b));
@@ -50,10 +53,10 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
         float score = smoothstep(0.26, 0.32, mx) * smoothstep(0.45, 0.60, s);
         if (score > best) { best = score; bg = c; }
     }
-    if (best < 0.01) { fragColor = tex; return; }                    // 本格非信号态 → 直通
+    if (best < 0.01) { fragColor = tex; return; }                    // 本像素非信号态 → 直通
 
     float maxc = max(bg.r, max(bg.g, bg.b));
-    float gate = best;
+    float gate = 1.0;   // 已确认是信号格(best>=0.01)→ 满强度渲染, 别用 best 冲淡("变 low")
 
     // ── one-hot 状态权重 (通道比例, 对亮度缩放免疫) ──
     vec3 nb = bg / max(maxc, 1e-4);
@@ -67,21 +70,21 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     float wViolet = coldB * violetness;
     float wBlue   = coldB * (1.0 - violetness);
 
-    // ════ run: 极光流彩 (格内坐标) ════
-    float w1 = sin(puv.x * 3.0 + t * 0.50 + sin(puv.y * 4.0 + t * 0.30) * 0.8);
-    float w2 = sin(puv.y * 5.0 - t * 0.40 + w1);
-    float hue = t * 0.06 + puv.x * 0.35 - puv.y * 0.22 + w1 * 0.12 + w2 * 0.08;
+    // ════ run: 极光流彩 (格内坐标) — 流速加快(时间系数 ×~1.8)════
+    float w1 = sin(puv.x * 3.0 + t * 0.90 + sin(puv.y * 4.0 + t * 0.55) * 0.8);
+    float w2 = sin(puv.y * 5.0 - t * 0.72 + w1);
+    float hue = t * 0.12 + puv.x * 0.35 - puv.y * 0.22 + w1 * 0.12 + w2 * 0.08;
     vec3 effRun = vec3(0.105) + vec3(0.080) * cos(6.28318 * (hue + vec3(0.0, 0.33, 0.67)));
-    effRun *= 1.0 + 0.22 * sin(puv.x * 6.0 + t * 0.7 + w2);
+    effRun *= 1.0 + 0.22 * sin(puv.x * 6.0 + t * 1.25 + w2);
 
-    // ════ done: 翡翠呼吸 + 雾浪 ════
+    // ════ done: 翡翠呼吸 + 雾浪 (格内坐标) ════
     vec3 effDone = vec3(0.045, 0.150, 0.095) * (1.0 + 0.16 * sin(t * 1.1 + puv.y * 2.0));
     float mist = smoothstep(0.34 + 0.05 * sin(puv.x * 4.0 + t * 0.6), 0.0, puv.y) * 0.55
                + smoothstep(0.16 + 0.04 * sin(puv.x * 7.0 - t * 0.9), 0.0, puv.y) * 0.55
                + smoothstep(0.10 + 0.03 * sin(puv.x * 9.0 + t * 0.8), 0.0, 1.0 - puv.y) * 0.35;
     effDone += vec3(0.020, 0.105, 0.060) * mist;
 
-    // ════ attn: 琥珀呼吸 + 层叠波浪 ════
+    // ════ attn: 琥珀呼吸 + 层叠波浪 (格内坐标) ════
     vec3 effAttn = bg * (1.0 + 0.10 * (0.5 + 0.5 * sin(t * 1.8)));
     float eb = puv.y;
     float et = 1.0 - puv.y;
@@ -127,27 +130,29 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     float vig = smoothstep(1.15, 0.35, length((puv - 0.5) * vec2(aspect, 1.0)));
     effErr *= 0.55 + 0.45 * vig;
 
-    // ════ seen: 静谧紫罗兰夜灯 ════
+    // ════ seen: 静谧紫罗兰夜灯 (格内坐标) ════
     vec3 effSeen = vec3(0.100, 0.052, 0.165) * (1.0 + 0.10 * sin(t * 0.9 + puv.y * 1.5));
     float rim = smoothstep(0.45, 1.05, length((puv - 0.5) * vec2(aspect, 1.0)));
     effSeen += vec3(0.14, 0.08, 0.26) * rim * (0.55 + 0.30 * sin(t * 0.7));
 
     // ════ 粒子 (格内坐标, 参数按 one-hot 权重混合) ════
+    // 5 层 + 低门槛 + 每格独立种子(掺 cellSeed) → 密集且不克隆
     float pSpeed = 0.25 * wBlue + 0.35 * wGreen + 1.00 * wAmber + 0.80 * wRed + 0.12 * wViolet;
     float pSize  = 0.05 * wBlue + 0.09 * wGreen + 0.10 * wAmber + 0.07 * wRed + 0.06 * wViolet;
-    float pThr   = 0.90 * wBlue + 0.80 * wGreen + 0.75 * wAmber + 0.82 * wRed + 0.88 * wViolet;
-    float pSeed  = 7.0  * wBlue + 3.0  * wGreen + 0.00 * wAmber + 11.0 * wRed + 21.0 * wViolet;
-    vec3  pCol   = vec3(0.90, 0.95, 1.00) * 0.25 * wBlue
-                 + vec3(0.45, 0.95, 0.55) * 0.45 * wGreen
-                 + vec3(1.00, 0.60, 0.16) * 0.50 * wAmber
-                 + vec3(1.00, 0.35, 0.10) * 0.40 * wRed
-                 + vec3(0.72, 0.58, 1.00) * 0.30 * wViolet;
+    float pThr   = 0.84 * wBlue + 0.72 * wGreen + 0.68 * wAmber + 0.76 * wRed + 0.80 * wViolet;
+    float pSeed  = 7.0  * wBlue + 3.0  * wGreen + 0.00 * wAmber + 11.0 * wRed + 21.0 * wViolet
+                 + cellSeed * 53.0;
+    vec3  pCol   = vec3(0.90, 0.95, 1.00) * 0.30 * wBlue
+                 + vec3(0.45, 0.95, 0.55) * 0.52 * wGreen
+                 + vec3(1.00, 0.60, 0.16) * 0.58 * wAmber
+                 + vec3(1.00, 0.35, 0.10) * 0.46 * wRed
+                 + vec3(0.72, 0.58, 1.00) * 0.36 * wViolet;
     float parts = 0.0;
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 5; i++) {
         float fi = float(i);
-        float scale = 12.0 + fi * 9.0;
+        float scale = 11.0 + fi * 7.5;
         vec2 p = puv * scale * vec2(aspect, 1.0);
-        p.y -= t * pSpeed * (0.6 + 0.35 * fi);
+        p.y -= t * pSpeed * (0.6 + 0.30 * fi);
         p.x += sin(t * 0.6 + fi * 2.0 + puv.y * 4.0) * 0.3;
         vec2 id = floor(p);
         vec2 f  = fract(p) - 0.5;
@@ -157,7 +162,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
                                    cos(t * (0.5 + rnd * 0.7) + rnd * 12.6));
             float d  = length(f - off);
             float tw = 0.55 + 0.45 * sin(t * (1.5 + 2.5 * rnd) + rnd * 40.0);
-            parts += smoothstep(pSize * (1.0 + rnd), 0.0, d) * tw * (0.35 + 0.25 * fi);
+            parts += smoothstep(pSize * (1.0 + rnd), 0.0, d) * tw * (0.32 + 0.20 * fi);
         }
     }
 

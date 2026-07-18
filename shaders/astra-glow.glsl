@@ -51,12 +51,12 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     float wViolet = coldB * violetness;
     float wBlue   = coldB * (1.0 - violetness);
 
-    // ════ run: 极光流彩 ════
-    float w1 = sin(uv.x * 3.0 + t * 0.50 + sin(uv.y * 4.0 + t * 0.30) * 0.8);
-    float w2 = sin(uv.y * 5.0 - t * 0.40 + w1);
-    float hue = t * 0.06 + uv.x * 0.35 - uv.y * 0.22 + w1 * 0.12 + w2 * 0.08;
+    // ════ run: 极光流彩 — 流速加快(时间系数 ×~1.8)════
+    float w1 = sin(uv.x * 3.0 + t * 0.90 + sin(uv.y * 4.0 + t * 0.55) * 0.8);
+    float w2 = sin(uv.y * 5.0 - t * 0.72 + w1);
+    float hue = t * 0.12 + uv.x * 0.35 - uv.y * 0.22 + w1 * 0.12 + w2 * 0.08;
     vec3 effRun = vec3(0.105) + vec3(0.080) * cos(6.28318 * (hue + vec3(0.0, 0.33, 0.67)));
-    effRun *= 1.0 + 0.22 * sin(uv.x * 6.0 + t * 0.7 + w2);
+    effRun *= 1.0 + 0.22 * sin(uv.x * 6.0 + t * 1.25 + w2);
 
     // ════ done: 翡翠呼吸 + 雾浪 ════
     vec3 effDone = vec3(0.045, 0.150, 0.095) * (1.0 + 0.16 * sin(t * 1.1 + uv.y * 2.0));
@@ -119,19 +119,20 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     // run=星尘 done=萤火虫 attn=琥珀粒子 err=余烬 seen=慢星尘
     float pSpeed = 0.25 * wBlue + 0.35 * wGreen + 1.00 * wAmber + 0.80 * wRed + 0.12 * wViolet;
     float pSize  = 0.05 * wBlue + 0.09 * wGreen + 0.10 * wAmber + 0.07 * wRed + 0.06 * wViolet;
-    float pThr   = 0.90 * wBlue + 0.80 * wGreen + 0.75 * wAmber + 0.82 * wRed + 0.88 * wViolet;
+    // 加密: 5 层(原 3)+ 门槛下调(更多粒子)+ 更亮, 与宫格版一致
+    float pThr   = 0.84 * wBlue + 0.72 * wGreen + 0.68 * wAmber + 0.76 * wRed + 0.80 * wViolet;
     float pSeed  = 7.0  * wBlue + 3.0  * wGreen + 0.00 * wAmber + 11.0 * wRed + 21.0 * wViolet;
-    vec3  pCol   = vec3(0.90, 0.95, 1.00) * 0.25 * wBlue
-                 + vec3(0.45, 0.95, 0.55) * 0.45 * wGreen
-                 + vec3(1.00, 0.60, 0.16) * 0.50 * wAmber
-                 + vec3(1.00, 0.35, 0.10) * 0.40 * wRed
-                 + vec3(0.72, 0.58, 1.00) * 0.30 * wViolet;
+    vec3  pCol   = vec3(0.90, 0.95, 1.00) * 0.30 * wBlue
+                 + vec3(0.45, 0.95, 0.55) * 0.52 * wGreen
+                 + vec3(1.00, 0.60, 0.16) * 0.58 * wAmber
+                 + vec3(1.00, 0.35, 0.10) * 0.46 * wRed
+                 + vec3(0.72, 0.58, 1.00) * 0.36 * wViolet;
     float parts = 0.0;
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 5; i++) {
         float fi = float(i);
-        float scale = 12.0 + fi * 9.0;
+        float scale = 11.0 + fi * 7.5;
         vec2 p = uv * scale * vec2(aspect, 1.0);
-        p.y -= t * pSpeed * (0.6 + 0.35 * fi);
+        p.y -= t * pSpeed * (0.6 + 0.30 * fi);
         p.x += sin(t * 0.6 + fi * 2.0 + uv.y * 4.0) * 0.3;
         vec2 id = floor(p);
         vec2 f  = fract(p) - 0.5;
@@ -141,7 +142,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
                                    cos(t * (0.5 + rnd * 0.7) + rnd * 12.6));
             float d  = length(f - off);
             float tw = 0.55 + 0.45 * sin(t * (1.5 + 2.5 * rnd) + rnd * 40.0);
-            parts += smoothstep(pSize * (1.0 + rnd), 0.0, d) * tw * (0.35 + 0.25 * fi);
+            parts += smoothstep(pSize * (1.0 + rnd), 0.0, d) * tw * (0.32 + 0.20 * fi);
         }
     }
 
