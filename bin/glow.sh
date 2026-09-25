@@ -89,6 +89,18 @@ front_is_terminal() {
     | grep -qiE 'ghostty|orca|iterm|terminal|wezterm|kitty|alacritty'
 }
 
+# 第三道闸: 最近几秒真有人按键/点击/滚轮 (不算鼠标移动)。
+# ⚠️ CC 全屏 TUI 开了 any-motion 鼠标上报 (?1003), 鼠标只是划过某个 pane 也会往它
+# 的 tty 写事件 → atime 跳; Orca 又永远在前台 → 完成绿一闪就被判成已读紫
+# (2026-09-25 Asher 报「绿一下就变紫」)。按事件类型取「距上次多少秒」:
+# 10=按键 1=左键 3=右键 22=滚轮; 免权限, ~60ms。GLOW_TEST_TOUCH=0/1 离线注入。
+human_touched() {
+  if [ -n "$GLOW_TEST_TOUCH" ]; then [ "$GLOW_TEST_TOUCH" = "1" ]; return; fi
+  osascript -l JavaScript -e 'ObjC.import("CoreGraphics");
+    Math.min.apply(null,[10,1,3,22].map(function(t){return $.CGEventSourceSecondsSinceLastEventType(1,t)})) < 4 ? "y" : "n"' \
+    2>/dev/null | grep -q y
+}
+
 # ============================================================
 # watchdog (后台进程): 盯 agent 存活 + done→attn 升级
 # ============================================================
@@ -111,7 +123,7 @@ if [ "$VERB" = "_watch" ]; then
     if [ -n "$BASE" ]; then
       NOW_A=$(tty_atime "$TTYDEV")
       if [ "$NOW_A" -gt "$BASE" ] 2>/dev/null; then
-        if front_is_terminal; then
+        if front_is_terminal && human_touched; then
           echo "seen" > "$SDIR/state"
           rm -f "$SDIR/atime0"
           BASE=""
