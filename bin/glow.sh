@@ -64,16 +64,29 @@ set_title() { # $1=title $2=ttydev  (tmux 模式下 pane 标题意义不大, 跳
 
 anchor_gone() { ! kill -0 "$1" 2>/dev/null; }
 
+# 调试: 存在 ~/.astra/glow/DEBUG 标记文件时, 记录每次 hook 的 (时刻/动词/tty/
+# 前态)。用于诊断「背景卡色」这类间歇 bug——证明 done 到底有没有为某 pane 触发。
+# 平时无标记文件 → 零开销。清理: rm ~/.astra/glow/DEBUG
+dbg() {  # $1=verb $2=tty $3=prev_state $4=note
+  [ -f "$GLOW_ROOT/DEBUG" ] || return 0
+  printf '%s v=%-6s tty=%-8s prev=%-6s %s\n' \
+    "$(date '+%H:%M:%S')" "$1" "$(basename "${2:-?}")" "${3:-?}" "${4:-}" \
+    >> "$GLOW_ROOT/debug.log" 2>/dev/null
+}
+
 # tty 设备的 atime 在用户敲键时更新 (w 的 idle 就靠它) → 「疑似已读」信号。
 # ⚠️ 但终端协议应答 (光标查询/焦点事件/键盘协商) 也走输入流、同样更新 atime,
 # 所以 atime 跳动只是必要条件, 确认还需 front_is_ghostty 这道闸。
 tty_atime() { stat -f %a "$1" 2>/dev/null || stat -c %X "$1" 2>/dev/null || echo 0; }
 
-# 第二道闸: Ghostty 是不是前台 App (不是 → atime 跳动=协议噪音/切走时的失焦事件)
-# GLOW_TEST_FRONT=0/1 供离线测试注入
-front_is_ghostty() {
+# 第二道闸: 宿主终端是不是前台 App (不是 → atime 跳动=协议噪音/切走时的失焦事件)
+# ⚠️ 原来只认 Ghostty, 在 Orca (Electron 终端) 里必然 false → 「已读转紫」永不触发;
+# 现改为认一批终端宿主 (Ghostty / Orca / iTerm / Terminal / WezTerm / kitty / Alacritty)。
+# GLOW_TEST_FRONT=0/1 供离线测试注入。
+front_is_terminal() {
   if [ -n "$GLOW_TEST_FRONT" ]; then [ "$GLOW_TEST_FRONT" = "1" ]; return; fi
-  osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true' 2>/dev/null | grep -qi ghostty
+  osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true' 2>/dev/null \
+    | grep -qiE 'ghostty|orca|iterm|terminal|wezterm|kitty|alacritty'
 }
 
 # ============================================================
@@ -98,7 +111,7 @@ if [ "$VERB" = "_watch" ]; then
     if [ -n "$BASE" ]; then
       NOW_A=$(tty_atime "$TTYDEV")
       if [ "$NOW_A" -gt "$BASE" ] 2>/dev/null; then
-        if front_is_ghostty; then
+        if front_is_terminal; then
           echo "seen" > "$SDIR/state"
           rm -f "$SDIR/atime0"
           BASE=""
@@ -132,6 +145,11 @@ fi
 
 # ── tty + 锚点发现: 沿 PPID 链找第一个 stdio 挂 /dev/ttys* 的祖先 ──
 # (hook 进程通常没有 controlling tty, 不能用 /dev/tty)
+# ⚠️ 链上第一个 agent 进程 (claude/codex) 必须自己就挂着 tty 才算数。
+# 窗口里的 agent 用 Bash 起一个无头 `claude -p` (降AI判卷等脚本) 时, 子 agent 的
+# hook 会一路爬到父窗口的 tty → 它的 run/done/end 冒充本窗口: done 提前变绿,
+# end 直接把灯还原+删状态目录, 本回合剩下时间整窗不亮 (2026-09-25 实测复现)。
+is_agent() { case "$(basename "$(ps -o comm= -p "$1" 2>/dev/null)")" in claude|codex) return 0 ;; esac; return 1; }
 discover() {
   local pid=$$ i n
   for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
@@ -141,6 +159,8 @@ discover() {
     if [ -n "$n" ]; then
       FOUND_TTY="$n"; FOUND_ANCHOR="$pid"; return 0
     fi
+    # 先遇到一个不挂 tty 的 agent → 这是无头子 agent 的 hook, 不归任何窗口管
+    is_agent "$pid" && return 1
     pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
   done
   return 1
@@ -148,10 +168,11 @@ discover() {
 
 # ── 状态目录: 按 tty 键控 (一个窗口=一个 tty=一盏灯) ──
 init_state() {
-  discover || exit 0
+  if ! discover; then dbg "$VERB" "?" "?" "discover-FAIL(exit)"; exit 0; fi
   TTYDEV="$FOUND_TTY"; ANCHOR="$FOUND_ANCHOR"
   SDIR="$GLOW_ROOT/$(basename "$TTYDEV")"
   mkdir -p "$SDIR"
+  dbg "$VERB" "$TTYDEV" "$(cat "$SDIR/state" 2>/dev/null)"
   echo "$TTYDEV" > "$SDIR/tty"; echo "$ANCHOR" > "$SDIR/anchor"
 }
 
