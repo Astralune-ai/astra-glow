@@ -24,7 +24,7 @@
 # 所以没有 SessionEnd hook 的 agent (如 Codex) 或 crash 也不留残色。
 #
 # 纯 shell + printf, 零 AI token 成本。bash 3.2 兼容。
-# 项目: ~/Code/astra-glow  设计文档: docs/design.md
+# 项目: ~/Code/skills/astra-glow  设计文档: docs/design.md
 # ============================================================
 
 GLOW_ROOT="$HOME/.astra/glow"

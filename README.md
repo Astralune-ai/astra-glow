@@ -70,8 +70,8 @@ The moment the light has done its job, it settles: **any keystroke in that windo
 ## Quick Start
 
 ```bash
-git clone https://github.com/Astralune-ai/astra-glow.git ~/Code/astra-glow
-cd ~/Code/astra-glow
+git clone https://github.com/Astralune-ai/astra-glow.git ~/Code/skills/astra-glow
+cd ~/Code/skills/astra-glow
 ./install.sh          # ghostty + claude code + codex; idempotent; backs up configs
 ```
 

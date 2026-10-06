@@ -70,8 +70,8 @@
 ## 快速开始
 
 ```bash
-git clone https://github.com/Astralune-ai/astra-glow.git ~/Code/astra-glow
-cd ~/Code/astra-glow
+git clone https://github.com/Astralune-ai/astra-glow.git ~/Code/skills/astra-glow
+cd ~/Code/skills/astra-glow
 ./install.sh          # ghostty + claude code + codex 全装; 幂等; 自动备份配置
 ```
 
