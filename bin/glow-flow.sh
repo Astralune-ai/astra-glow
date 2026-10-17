@@ -70,6 +70,10 @@ while :; do
         else if (state=="error") { r=255; g=77;  b=77;  sp=4.5; bghex="#66101a" }
         else if (state=="seen")  { r=180; g=151; b=207; sp=0.8; bghex="#46156b" }
         else continue
+        # glow.sh 记下的实际底色优先 (Orca 里是暗色), 没有才用上表原色
+        bf = sd "/bg"; ob = ""
+        if ((getline ob < bf) > 0 && ob ~ /^#[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]$/) bghex = ob
+        close(bf)
         mf = sd "/flowed"; mark = ""
         if ((getline mark < mf) < 0) mark = ""
         close(mf)

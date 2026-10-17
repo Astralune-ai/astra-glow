@@ -63,6 +63,9 @@ if [ -n "$TMUX" ] && [ -n "$TMUX_PANE" ]; then GLOW_PANE="$TMUX_PANE"; fi
 set_bg() {   # $1=color $2=ttydev
   if [ -n "$GLOW_PANE" ]; then tmux select-pane -t "$GLOW_PANE" -P "bg=$1" 2>/dev/null
   else printf '\033]11;%s\007' "$1" >> "$2" 2>/dev/null; fi
+  # 记下这次实际用的底色: glow-flow 自愈重贴时照它贴 (Orca 用暗色, 不能被换回原色)
+  [ -n "$SDIR" ] && [ -d "$SDIR" ] && echo "$1" > "$SDIR/bg" 2>/dev/null
+  return 0
 }
 reset_bg() { # $1=ttydev
   if [ -n "$GLOW_PANE" ]; then tmux select-pane -t "$GLOW_PANE" -P 'bg=default' 2>/dev/null
