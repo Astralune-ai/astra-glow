@@ -38,6 +38,17 @@ ATTN_COLOR="#654310"
 ERROR_COLOR="#66101a"
 SEEN_COLOR="#46156b"   # 紫罗兰夜灯: 亮度够过 shader 阈值 → 渲染慢呼吸+边缘微光+慢星尘(流动)
 
+# ── Orca 终端没有 Ghostty shader, 信号色直接变成整块纯色底, 字色对比度掉 30–55%。
+#    换同色相、亮度≈平时底色 1.25 倍的暗色: 五态照样分得开, 字的对比度回到平时 ~96%。
+#    GLOW_PALETTE=bright 强制用上面的原色。
+if [ "${TERM_PROGRAM:-}" = "Orca" ] && [ "${GLOW_PALETTE:-}" != "bright" ]; then
+  RUN_COLOR="#0b253f"
+  DONE_COLOR="#072a18"
+  ATTN_COLOR="#312108"
+  ERROR_COLOR="#4a0c13"
+  SEEN_COLOR="#361052"
+fi
+
 VERB="$1"
 
 # ── 模式检测: 在 tmux pane 里 → 用 tmux 给本 pane 上色; 否则原生 → OSC 写 tty ──
