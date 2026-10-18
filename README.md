@@ -99,6 +99,7 @@ The tty is discovered by walking the hook process's parent chain with `lsof` unt
 | Unread → amber escalation delay | `export GLOW_ATTN_SECS=300` (default `600`) |
 | Effect density / brightness / palette | edit `shaders/astra-glow.glsl` (single `mainImage`, parameters inline), reload Ghostty |
 | Signal colors | top of `bin/glow.sh` + matching thresholds in the shader |
+| Keep the bright signal colors on Orca | `export GLOW_PALETTE=bright` (default: dark palette on Orca, see below) |
 
 ## Hard-Won Notes (Ghostty shader pipeline)
 
@@ -113,8 +114,21 @@ The tty is discovered by walking the hook process's parent chain with `lsof` unt
 |---|---|---|
 | [Ghostty](https://ghostty.org) ≥ 1.2 | ✅ | ✅ full experience |
 | iTerm2 / Kitty / WezTerm / Alacritty | ✅ (OSC 11 is universal) | — graceful degradation to flat status colors |
+| [Orca](https://github.com/stablyai/orca) | ✅ dark palette, picked automatically | — flat status colors |
 
 The two layers are decoupled by design: the signal layer needs only OSC 11 support, so on any modern terminal you still get four glanceable status colors. The animation layer rides on Ghostty's `custom-shader`, which has no equivalent elsewhere yet.
+
+**Orca uses a dark palette.** Without the shader the signal color becomes a flat background behind everything you read, and the bright signal colors cut syntax-highlight contrast by 30–55% (red text on the done-green drops from 3.2:1 to 1.4:1). When `TERM_PROGRAM=Orca`, `glow.sh` switches to same-hue colors at about 1.25× the luminance of a typical dark background, which keeps text contrast at ~96% of normal while the five states stay distinct:
+
+| State | Signal color (Ghostty) | Orca color |
+|---|---|---|
+| run | `#123c66` | `#0b253f` |
+| done | `#10663a` | `#072a18` |
+| attn | `#654310` | `#312108` |
+| error | `#66101a` | `#4a0c13` |
+| seen | `#46156b` | `#361052` |
+
+`glow.sh` records the color it actually painted in `~/.astra/glow/<tty>/bg`, and the `glow-flow` self-heal daemon repaints from that record, so it never flips a pane back to the bright set.
 
 Also needed: `jq`, `lsof` (installer + engine), macOS, and an agent that fires lifecycle hooks.
 

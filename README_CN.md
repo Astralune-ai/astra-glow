@@ -99,6 +99,7 @@ tty 定位：沿 hook 进程的父链用 `lsof` 上溯，找到第一个 stdio �
 | 完成→琥珀催看延时 | `export GLOW_ATTN_SECS=300`（默认 `600`） |
 | 特效密度 / 亮度 / 配色 | 改 `shaders/astra-glow.glsl`（单 `mainImage`，参数全内联），重载 Ghostty |
 | 信号色 | `bin/glow.sh` 顶部 + shader 里对应阈值 |
+| Orca 里也用原来的亮色 | `export GLOW_PALETTE=bright`（默认 Orca 用暗色，见下） |
 
 ## 踩坑实录（Ghostty shader 管线）
 
@@ -113,8 +114,21 @@ tty 定位：沿 hook 进程的父链用 `lsof` 上溯，找到第一个 stdio �
 |---|---|---|
 | [Ghostty](https://ghostty.org) ≥ 1.2 | ✅ | ✅ 完整体验 |
 | iTerm2 / Kitty / WezTerm / Alacritty | ✅（OSC 11 是通用协议） | — 优雅降级为四色状态灯 |
+| [Orca](https://github.com/stablyai/orca) | ✅ 自动换暗色 | — 纯色状态灯 |
 
 两层设计上就是解耦的：信号层只要终端支持 OSC 11，四色状态一眼可辨；动画层跑在 Ghostty 的 `custom-shader` 上，其他终端暂无等价物。
+
+**Orca 里用暗色。** 没有 shader 时信号色就是整块纯色底，压在你读的所有字后面；原来那套亮色会让代码高亮的对比度掉 30%～55%（完成绿底上的红字从 3.2:1 掉到 1.4:1）。`TERM_PROGRAM=Orca` 时 `glow.sh` 自动换成同色相、亮度约为普通暗色底 1.25 倍的颜色，字的对比度回到平时的约 96%，五态照样分得开：
+
+| 状态 | 信号色（Ghostty） | Orca 用色 |
+|---|---|---|
+| run | `#123c66` | `#0b253f` |
+| done | `#10663a` | `#072a18` |
+| attn | `#654310` | `#312108` |
+| error | `#66101a` | `#4a0c13` |
+| seen | `#46156b` | `#361052` |
+
+`glow.sh` 把实际刷上去的颜色记在 `~/.astra/glow/<tty>/bg`，自愈守护进程 `glow-flow` 重刷时照这个记录刷，不会把窗格刷回亮色。
 
 另需：`jq`、`lsof`（安装器 + 引擎）、macOS、任何有生命周期 hooks 的 agent。
 

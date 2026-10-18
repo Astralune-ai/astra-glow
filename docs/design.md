@@ -107,6 +107,14 @@ Asher 确认琥珀特效后拍板：run/done 也要 fancy 动画，error 要骷�
 另修：状态目录从 session_id 改为按 tty 键控（session_id 会因 fork/上下文压缩
 变化，多目录抢同一窗口导致颜色打架）。
 
+## Phase 4（2026-10-17）：Orca 里换暗色信号
+
+Orca（xterm.js）没有 Ghostty 的 custom-shader，信号色直接成了整块纯色底。实测原来五色让 Kanagawa 字色对比度掉 30%～55%：完成绿底上红字 3.2→1.4、正文 11.6→5.0。Asher：「这里面的颜色等终端一亮灯就全被统一了」「这些颜色太亮了」。
+
+- `TERM_PROGRAM=Orca` 时 `glow.sh` 换同色相暗色（亮度≈平时底色 `#1f1f28` 的 1.25 倍）：run `#0b253f` / done `#072a18` / attn `#312108` / error `#4a0c13` / seen `#361052`；红字对比度各态都回到 3.1、正文 11.1（平时 3.2 / 11.6）。`GLOW_PALETTE=bright` 强制用原色。
+- `glow-flow` 自愈重贴原来写死用原色，状态一变就把暗色刷回亮色。改成：`set_bg` 把实际用的颜色写进 `<state_dir>/bg`，`glow-flow` 有这份记录就照它贴，没有才回落到表里的原色。
+- 改正在运行的 bash 脚本用「写临时文件再 rename」，旧进程拿着旧 inode 不受影响；改完 `launchctl kickstart -k gui/$UID/com.asher.glow.flow` 重启守护进程。
+
 ## 测试
 1. 直接对当前 session 的 tty 手动跑各动词，肉眼验证四态颜色 + 还原
 2. 验证 animator 在锚点进程消失后自动还原退出
